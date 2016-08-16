@@ -2,7 +2,7 @@ package network
 
 type Processor interface {
 	// must goroutine safe
-	Route(msg interface{}, userData interface{}) error
+	DoRoute(msg interface{}, ud interface{}) error
 	// must goroutine safe
 	Unmarshal(data []byte) (interface{}, error)
 	// must goroutine safe

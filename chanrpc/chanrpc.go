@@ -10,6 +10,14 @@ import (
 
 // one server per goroutine (goroutine not safe)
 // one client per goroutine (goroutine not safe)
+
+///////////////
+// Server持有: RPC函数表.映射.各种映射. (任意类型ID到函数)
+// 函数类型如下:
+// func([]interface{})               无返回值
+// func([]interface{})interface{}    仅一个返回值
+// func([]interface{})[]interface{}  多个返回值
+// ID可以是一个string, 也可以是一个｀类型‘
 type Server struct {
 	// id -> function
 	//
@@ -134,8 +142,10 @@ func (s *Server) Exec(ci *CallInfo) {
 	}
 }
 
+
+//////////////
 // goroutine safe
-func (s *Server) Go(id interface{}, args ...interface{}) {
+func (s *Server) DoDispatch(id interface{}, args ...interface{}) {
 	f := s.functions[id]
 	if f == nil {
 		return

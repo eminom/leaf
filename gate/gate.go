@@ -1,3 +1,5 @@
+
+
 package gate
 
 import (
@@ -8,6 +10,8 @@ import (
 	"time"
 )
 
+//~ Try to fit into the interface of `Module'
+//~ And three methods must be implemented.
 type Gate struct {
 	MaxConnNum      int
 	PendingWriteNum int
@@ -25,27 +29,35 @@ type Gate struct {
 	LittleEndian bool
 }
 
-func (gate *Gate) Run(closeSig chan bool) {
-	var wsServer *network.WSServer
+// func genAgentMaker(gate *Gate) network.Agent{
+// 	return func()
+// }
+
+func (gate *Gate) _createWSServer() *network.WSServer {
 	if gate.WSAddr != "" {
-		wsServer = new(network.WSServer)
+		log.Debug("Creating websocket server for now:%v", gate.WSAddr)
+		wsServer := new(network.WSServer)
 		wsServer.Addr = gate.WSAddr
 		wsServer.MaxConnNum = gate.MaxConnNum
 		wsServer.PendingWriteNum = gate.PendingWriteNum
 		wsServer.MaxMsgLen = gate.MaxMsgLen
 		wsServer.HTTPTimeout = gate.HTTPTimeout
 		wsServer.NewAgent = func(conn *network.WSConn) network.Agent {
-			a := &agent{conn: conn, gate: gate}
+			a := &xagent{conn: conn, gate: gate}
 			if gate.AgentChanRPC != nil {
-				gate.AgentChanRPC.Go("NewAgent", a)
+				gate.AgentChanRPC.DoDispatch("NewAgent", a)
 			}
 			return a
 		}
+		return wsServer
 	}
+	return nil
+}
 
-	var tcpServer *network.TCPServer
+func (gate *Gate) _createTCPServer() *network.TCPServer {
 	if gate.TCPAddr != "" {
-		tcpServer = new(network.TCPServer)
+		log.Debug("Creating TCP server for now:%v", gate.TCPAddr)
+		tcpServer := new(network.TCPServer)
 		tcpServer.Addr = gate.TCPAddr
 		tcpServer.MaxConnNum = gate.MaxConnNum
 		tcpServer.PendingWriteNum = gate.PendingWriteNum
@@ -53,52 +65,77 @@ func (gate *Gate) Run(closeSig chan bool) {
 		tcpServer.MaxMsgLen = gate.MaxMsgLen
 		tcpServer.LittleEndian = gate.LittleEndian
 		tcpServer.NewAgent = func(conn *network.TCPConn) network.Agent {
-			a := &agent{conn: conn, gate: gate}
+			a := &xagent{conn: conn, gate: gate}
 			if gate.AgentChanRPC != nil {
-				gate.AgentChanRPC.Go("NewAgent", a)
+				gate.AgentChanRPC.DoDispatch("NewAgent", a)
 			}
 			return a
 		}
-	}
+		return tcpServer
+	}	
+	return nil
+}
 
-	if wsServer != nil {
+
+//~ Aim to implement Module's interface of `Run'
+func (gate *Gate) Run(clozeSig chan bool) {
+	if wsServer := gate._createWSServer(); wsServer!= nil {
 		wsServer.Start()
+		defer func(){
+			log.Debug("Closing of ws-server...")
+			wsServer.Close()	//~ Watch 
+		}()
 	}
-	if tcpServer != nil {
+	if tcpServer := gate._createTCPServer(); tcpServer != nil {
 		tcpServer.Start()
+		defer func(){
+			log.Debug("Closing of tcp-server")
+			tcpServer.Close() //~ Is is abusive ?? No.
+		}()
 	}
-	<-closeSig
-	if wsServer != nil {
-		wsServer.Close()
-	}
-	if tcpServer != nil {
-		tcpServer.Close()
-	}
+	<- clozeSig
 }
 
-func (gate *Gate) OnDestroy() {}
+//~ 此处的Gate未实现Module的OnInit接口。 要派生类中实现.
+func (gate *Gate) OnInit() {
+ 	log.Debug("Gate's OnInit ??")
+ 	panic("You shall override Gate's OnInit")
+}
+func (gate *Gate) OnDestroy() {
+	log.Debug("Gate's OnDestroy ?? The default implementation from Gate")
+}
+//~ 有且仅有Run实现了. 
 
-type agent struct {
-	conn     network.Conn
-	gate     *Gate
-	userData interface{}
+////////////////
+//~ Not the one exported(Distinguished from A-gent)
+//~     network's Agent is implemented( Run/OnClose)
+//~ And gate's Agent is also implemented. (WriteMsg and so on)
+type xagent struct {
+	conn     network.Conn  //~ This si combination. 
+	gate     *Gate         //~ 
+	//userData interface{}   // .Kind() == reflect.Ptr. For now this is useless.
 }
 
-func (a *agent) Run() {
+//~ Depends on Message Processor. 
+//~ interface: network.Run
+func (a *xagent) Run() {
 	for {
 		data, err := a.conn.ReadMsg()
 		if err != nil {
 			log.Debug("read message: %v", err)
 			break
 		}
-
 		if a.gate.Processor != nil {
 			msg, err := a.gate.Processor.Unmarshal(data)
 			if err != nil {
 				log.Debug("unmarshal message error: %v", err)
 				break
 			}
-			err = a.gate.Processor.Route(msg, a)
+			//~ And the message will be dispatched through `Do-Dispatch'
+			//~ The message is mapped to chanrpc.Server (to which `Do-Dispatch' belongs)
+			//~ And the across goroutine calls are made in here.
+			//~ Shall we combine the two procedures(Unmarshal and DoRoute(redistribute))
+			err = a.gate.Processor.DoRoute(msg, a)
 			if err != nil {
 				log.Debug("route message error: %v", err)
 				break
@@ -107,7 +144,8 @@ func (a *agent) Run() {
 	}
 }
 
-func (a *agent) OnClose() {
+//~ interface : network.Agent
+func (a *xagent) OnClose() {
 	if a.gate.AgentChanRPC != nil {
 		err := a.gate.AgentChanRPC.Call0("CloseAgent", a)
 		if err != nil {
@@ -116,7 +154,7 @@ func (a *agent) OnClose() {
 	}
 }
 
-func (a *agent) WriteMsg(msg interface{}) {
+func (a *xagent) WriteMsg(msg interface{}) {
 	if a.gate.Processor != nil {
 		data, err := a.gate.Processor.Marshal(msg)
 		if err != nil {
@@ -130,18 +168,18 @@ func (a *agent) WriteMsg(msg interface{}) {
 	}
 }
 
-func (a *agent) Close() {
+func (a *xagent) Close() {
 	a.conn.Close()
 }
 
-func (a *agent) Destroy() {
-	a.conn.Destroy()
+func (a *xagent) Destroy() {
+	a.conn.Destroy()   //~ What is the difference from C-lose() ??
 }
 
-func (a *agent) UserData() interface{} {
-	return a.userData
-}
+// func (a *xagent) UserData() interface{} {
+// 	return a.userData
+// }
 
-func (a *agent) SetUserData(data interface{}) {
-	a.userData = data
-}
+// func (a *xagent) SetUserData(data interface{}) {
+// 	a.userData = data
+// }

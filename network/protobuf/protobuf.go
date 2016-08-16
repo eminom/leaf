@@ -23,10 +23,10 @@ type Processor struct {
 type MsgInfo struct {
 	msgType    reflect.Type
 	msgRouter  *chanrpc.Server
-	msgHandler MsgHandler
+	//msgHandler MsgHandler
 }
 
-type MsgHandler func([]interface{})
+//type MsgHandler func([]interface{})
 
 func NewProcessor() *Processor {
 	p := new(Processor)
@@ -71,6 +71,7 @@ func (p *Processor) SetRouter(msg proto.Message, msgRouter *chanrpc.Server) {
 }
 
 // It's dangerous to call the method on routing or marshaling (unmarshaling)
+/*
 func (p *Processor) SetHandler(msg proto.Message, msgHandler MsgHandler) {
 	msgType := reflect.TypeOf(msg)
 	id, ok := p.msgID[msgType]
@@ -80,9 +81,12 @@ func (p *Processor) SetHandler(msg proto.Message, msgHandler MsgHandler) {
 
 	p.msgInfo[id].msgHandler = msgHandler
 }
+*/ // It is useless in this way.
 
+///
 // goroutine safe
-func (p *Processor) Route(msg interface{}, userData interface{}) error {
+
+func (p *Processor) DoRoute(msg interface{}, ud interface{}) error {
 	msgType := reflect.TypeOf(msg)
 	id, ok := p.msgID[msgType]
 	if !ok {
@@ -90,11 +94,11 @@ func (p *Processor) Route(msg interface{}, userData interface{}) error {
 	}
 
 	i := p.msgInfo[id]
-	if i.msgHandler != nil {
-		i.msgHandler([]interface{}{msg, userData})
-	}
+	// if i.msgHandler != nil {
+	// 	i.msgHandler([]interface{}{msg, ud})
+	// }
 	if i.msgRouter != nil {
-		i.msgRouter.Go(msgType, msg, userData)
+		i.msgRouter.DoDispatch(msgType, msg, ud)
 	}
 	return nil
 }
@@ -131,7 +135,6 @@ func (p *Processor) Marshal(msg interface{}) ([][]byte, error) {
 		err := fmt.Errorf("message %s not registered", msgType)
 		return nil, err
 	}
-
 	id := make([]byte, 2)
 	if p.littleEndian {
 		binary.LittleEndian.PutUint16(id, _id)

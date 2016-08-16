@@ -1,9 +1,11 @@
+
+
 package network
 
 import (
-	"errors"
 	"github.com/gorilla/websocket"
 	"github.com/name5566/leaf/log"
+	"errors"
 	"net"
 	"sync"
 )
@@ -12,7 +14,7 @@ type WebsocketConnSet map[*websocket.Conn]struct{}
 
 type WSConn struct {
 	sync.Mutex
-	conn      *websocket.Conn
+	conn *websocket.Conn
 	writeChan chan []byte
 	maxMsgLen uint32
 	closeFlag bool

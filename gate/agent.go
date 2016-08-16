@@ -4,6 +4,6 @@ type Agent interface {
 	WriteMsg(msg interface{})
 	Close()
 	Destroy()
-	UserData() interface{}
-	SetUserData(data interface{})
+	//UserData() interface{}
+	//SetUserData(data interface{})
 }

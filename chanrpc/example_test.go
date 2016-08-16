@@ -113,7 +113,7 @@ func Example() {
 		c.Cb(<-c.ChanAsynRet)
 
 		// go
-		s.Go("f0")
+		s.DoDispatch("f0")
 
 		wg.Done()
 	}()
