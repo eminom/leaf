@@ -17,3 +17,5 @@ var (
 	ConnAddrs       []string
 	PendingWriteNum int
 )
+
+//Access with conf.LenStackBuf  (read-write)

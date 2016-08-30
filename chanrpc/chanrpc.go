@@ -193,7 +193,7 @@ func (s *Server) Open(l int) *Client {
 
 func NewClient(l int) *Client {
 	c := new(Client)
-	c.chanSyncRet = make(chan *RetInfo, 1)
+	c.chanSyncRet = make(chan *RetInfo, 1)  // Can this be zero ?? (To be fully synchronous) 
 	c.ChanAsynRet = make(chan *RetInfo, l)
 	return c
 }
